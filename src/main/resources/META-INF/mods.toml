@@ -1,0 +1,12 @@
+modLoader="javafml"
+loaderVersion="[52,)"
+license="MIT"
+
+[[mods]]
+modId="rpgmod"
+version="1.0.0"
+displayName="RPG Mod"
+description='''
+Mod RPG con clases, razas, armas animadas, habilidades y mazmorras.
+'''
+authors="TuNombre"
