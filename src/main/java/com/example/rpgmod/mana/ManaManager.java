@@ -10,13 +10,17 @@ public final class ManaManager {
 
     public static int getMaxMana(ServerPlayer p) {
         RpgEnums.Clase clase = RpgData.getClase(p);
-        return switch (clase) {
+        int base = switch (clase) {
             case MAGO -> 150;
             case CLERIGO -> 120;
             case ARQUERO, PICARO -> 80;
             case GUERRERO -> 60;
             default -> 50;
         };
+        if (RpgData.tieneHabilidad(p, "sabiduria")) {
+            base += 40;
+        }
+        return base;
     }
 
     public static float getMana(ServerPlayer p) {
@@ -34,6 +38,9 @@ public final class ManaManager {
     }
 
     public static boolean gastarMana(ServerPlayer p, float coste) {
+        if (RpgData.tieneHabilidad(p, "maestria")) {
+            coste = coste * 0.7f; // 30% menos de coste de maná
+        }
         float actual = getMana(p);
         if (actual >= coste) {
             setMana(p, actual - coste);
@@ -47,10 +54,11 @@ public final class ManaManager {
         int max = getMaxMana(p);
         if (actual < max) {
             setMana(p, Math.min(max, actual + 3.0f));
+        } else {
+            mostrarBarra(p);
         }
     }
 
-    // Dibuja una barra visual bonita sobre la barra de experiencia
     public static void mostrarBarra(ServerPlayer p) {
         if (RpgData.getClase(p) == RpgEnums.Clase.NINGUNA) return;
 
@@ -59,17 +67,13 @@ public final class ManaManager {
         int totalBloques = 10;
         int llenos = Math.round((actual / max) * totalBloques);
 
-        StringBuilder barra = new StringBuilder("§9✦ [");
+        StringBuilder barra = new StringBuilder("§bNv." + RpgData.getNivel(p) + " §9✦ [");
         for (int i = 0; i < totalBloques; i++) {
-            if (i < llenos) {
-                barra.append("§b■");
-            } else {
-                barra.append("§8■");
-            }
+            if (i < llenos) barra.append("§b■");
+            else barra.append("§8■");
         }
         barra.append("§9] §f").append((int) actual).append("§7/§f").append(max).append(" §9Maná ✦");
 
-        // El 'true' hace que aparezca sobre la barra de experiencia, no en el chat
         p.displayClientMessage(Component.literal(barra.toString()), true);
     }
 }
