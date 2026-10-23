@@ -2,15 +2,12 @@ package com.example.rpgmod.mana;
 
 import com.example.rpgmod.data.RpgData;
 import com.example.rpgmod.data.RpgEnums;
-import com.example.rpgmod.network.ManaSyncPacket;
-import com.example.rpgmod.network.NetworkHandler;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraftforge.network.PacketDistributor;
 
 public final class ManaManager {
     private static final String TAG_MANA = "rpg_mana_actual";
 
-    // Maná máximo según tu clase
     public static int getMaxMana(ServerPlayer p) {
         RpgEnums.Clase clase = RpgData.getClase(p);
         return switch (clase) {
@@ -18,7 +15,7 @@ public final class ManaManager {
             case CLERIGO -> 120;
             case ARQUERO, PICARO -> 80;
             case GUERRERO -> 60;
-            default -> 50; // Sin clase
+            default -> 50;
         };
     }
 
@@ -33,7 +30,7 @@ public final class ManaManager {
         float max = getMaxMana(p);
         float valor = Math.max(0, Math.min(mana, max));
         p.getPersistentData().putFloat(TAG_MANA, valor);
-        sincronizarConCliente(p);
+        mostrarBarra(p);
     }
 
     public static boolean gastarMana(ServerPlayer p, float coste) {
@@ -45,19 +42,34 @@ public final class ManaManager {
         return false;
     }
 
-    // Se llama cada segundo para recargar 2 puntos de maná
     public static void regenerar(ServerPlayer p) {
         float actual = getMana(p);
         int max = getMaxMana(p);
         if (actual < max) {
-            setMana(p, actual + 2.0f);
+            setMana(p, Math.min(max, actual + 3.0f));
         }
     }
 
-    public static void sincronizarConCliente(ServerPlayer p) {
-        NetworkHandler.CHANNEL.send(
-            new ManaSyncPacket(getMana(p), getMaxMana(p)),
-            PacketDistributor.PLAYER.with(p)
-        );
+    // Dibuja una barra visual bonita sobre la barra de experiencia
+    public static void mostrarBarra(ServerPlayer p) {
+        if (RpgData.getClase(p) == RpgEnums.Clase.NINGUNA) return;
+
+        float actual = getMana(p);
+        int max = getMaxMana(p);
+        int totalBloques = 10;
+        int llenos = Math.round((actual / max) * totalBloques);
+
+        StringBuilder barra = new StringBuilder("§9✦ [");
+        for (int i = 0; i < totalBloques; i++) {
+            if (i < llenos) {
+                barra.append("§b■");
+            } else {
+                barra.append("§8■");
+            }
+        }
+        barra.append("§9] §f").append((int) actual).append("§7/§f").append(max).append(" §9Maná ✦");
+
+        // El 'true' hace que aparezca sobre la barra de experiencia, no en el chat
+        p.displayClientMessage(Component.literal(barra.toString()), true);
     }
 }
