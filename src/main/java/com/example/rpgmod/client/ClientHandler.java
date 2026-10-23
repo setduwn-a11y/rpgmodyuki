@@ -2,8 +2,7 @@ package com.example.rpgmod.client;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraftforge.client.event.RenderGuiOverlayEvent;
-import net.minecraftforge.client.gui.overlay.VanillaGuiOverlay;
+import net.minecraftforge.client.event.RenderGuiLayerEvent;
 
 public final class ClientHandler {
     private static float manaActual = 0;
@@ -14,9 +13,9 @@ public final class ClientHandler {
         manaMaximo = max;
     }
 
-    public static void renderHud(RenderGuiOverlayEvent.Post event) {
-        // Solo dibujar una vez por fotograma (justo con la barra de objetos)
-        if (event.getOverlay() != VanillaGuiOverlay.HOTBAR.type()) return;
+    public static void renderHud(RenderGuiLayerEvent.Post event) {
+        // Solo dibujar una vez por fotograma, justo después de la hotbar (barra de objetos)
+        if (!event.getName().getPath().equals("hotbar")) return;
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null || mc.options.hideGui || manaMaximo <= 0) return;
