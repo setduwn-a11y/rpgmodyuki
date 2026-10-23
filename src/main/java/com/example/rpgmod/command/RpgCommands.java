@@ -25,25 +25,53 @@ public class RpgCommands {
         CommandDispatcher<CommandSourceStack> d = event.getDispatcher();
 
         d.register(Commands.literal("rpg")
-            // Perfil
             .then(Commands.literal("info").executes(ctx -> {
                 ServerPlayer p = ctx.getSource().getPlayerOrException();
-                RpgEnums.Raza raza = RpgData.getRaza(p);
-                RpgEnums.Clase clase = RpgData.getClase(p);
-                int corazones = (int) (p.getMaxHealth() / 2);
-                int mana = (int) ManaManager.getMana(p);
-                int maxMana = ManaManager.getMaxMana(p);
-
+                int nivel = RpgData.getNivel(p);
                 ctx.getSource().sendSuccess(() -> Component.literal(
                     "§6=== PERFIL RPG ===\n" +
-                    "§eRaza: §f" + raza.nombre + "\n" +
-                    "§eClase: §f" + clase.nombre + "\n" +
-                    "§eVida: §c" + corazones + " corazones\n" +
-                    "§eManá: §9" + mana + "/" + maxMana
+                    "§eRaza: §f" + RpgData.getRaza(p).nombre + " §7| §eClase: §f" + RpgData.getClase(p).nombre + "\n" +
+                    "§eNivel: §a" + nivel + " §7(" + RpgData.getXp(p) + "/" + RpgData.getXpNecesaria(nivel) + " XP)\n" +
+                    "§ePuntos de Habilidad: §b" + RpgData.getPuntos(p) + "\n" +
+                    "§eVida: §c" + (int)(p.getMaxHealth() / 2) + " corazones §7| §eManá: §9" + (int)ManaManager.getMana(p) + "/" + ManaManager.getMaxMana(p)
                 ), false);
                 return 1;
             }))
-            // Cambiar clase
+            .then(Commands.literal("arbol").executes(ctx -> {
+                ServerPlayer p = ctx.getSource().getPlayerOrException();
+                ctx.getSource().sendSuccess(() -> Component.literal(
+                    "§6=== ÁRBOL DE HABILIDADES (Puntos: " + RpgData.getPuntos(p) + ") ===\n" +
+                    estadoSkill(p, "vitalidad", "+2 Corazones permanentes") + "\n" +
+                    estadoSkill(p, "sabiduria", "+40 de Maná máximo") + "\n" +
+                    estadoSkill(p, "agilidad", "+10% de Velocidad") + "\n" +
+                    estadoSkill(p, "poder", "Doble de daño en tus habilidades") + "\n" +
+                    estadoSkill(p, "maestria", "Tus habilidades cuestan 30% menos maná") + "\n" +
+                    "§eUsa: §f/rpg aprender <nombre>"
+                ), false);
+                return 1;
+            }))
+            .then(Commands.literal("aprender")
+                .then(Commands.argument("habilidad", StringArgumentType.word())
+                    .executes(ctx -> {
+                        ServerPlayer p = ctx.getSource().getPlayerOrException();
+                        String id = StringArgumentType.getString(ctx, "habilidad").toLowerCase();
+                        if (!id.equals("vitalidad") && !id.equals("sabiduria") && !id.equals("agilidad") && !id.equals("poder") && !id.equals("maestria")) {
+                            ctx.getSource().sendFailure(Component.literal("§cHabilidad no existe. Mira /rpg arbol"));
+                            return 0;
+                        }
+                        if (RpgData.tieneHabilidad(p, id)) {
+                            ctx.getSource().sendFailure(Component.literal("§cYa aprendiste esta habilidad."));
+                            return 0;
+                        }
+                        if (RpgData.getPuntos(p) < 1) {
+                            ctx.getSource().sendFailure(Component.literal("§cNo tienes Puntos de Habilidad. ¡Mata monstruos para subir de nivel!"));
+                            return 0;
+                        }
+                        RpgData.setPuntos(p, RpgData.getPuntos(p) - 1);
+                        RpgData.desbloquearHabilidad(p, id);
+                        ctx.getSource().sendSuccess(() -> Component.literal("§a¡Desbloqueaste la mejora: §e" + id.toUpperCase() + "§a!"), false);
+                        return 1;
+                    })))
             .then(Commands.literal("clase")
                 .then(Commands.argument("nombre", StringArgumentType.word())
                     .executes(ctx -> {
@@ -52,15 +80,14 @@ public class RpgCommands {
                         try {
                             RpgEnums.Clase clase = RpgEnums.Clase.valueOf(arg);
                             RpgData.setClase(p, clase);
-                            ManaManager.setMana(p, ManaManager.getMaxMana(p)); // Llenar maná al cambiar
+                            ManaManager.setMana(p, ManaManager.getMaxMana(p));
                             ctx.getSource().sendSuccess(() -> Component.literal("§aAhora eres de la clase: §f" + clase.nombre), false);
                             return 1;
                         } catch (Exception e) {
-                            ctx.getSource().sendFailure(Component.literal("§cClase no valida. Opciones: GUERRERO, MAGO, ARQUERO, PICARO, CLERIGO"));
+                            ctx.getSource().sendFailure(Component.literal("§cOpciones: GUERRERO, MAGO, ARQUERO, PICARO, CLERIGO"));
                             return 0;
                         }
                     })))
-            // Cambiar raza
             .then(Commands.literal("raza")
                 .then(Commands.argument("nombre", StringArgumentType.word())
                     .executes(ctx -> {
@@ -72,82 +99,97 @@ public class RpgCommands {
                             ctx.getSource().sendSuccess(() -> Component.literal("§aTu raza ahora es: §f" + raza.nombre), false);
                             return 1;
                         } catch (Exception e) {
-                            ctx.getSource().sendFailure(Component.literal("§cRaza no valida. Opciones: HUMANO, ELFO, ENANO, ORCO"));
+                            ctx.getSource().sendFailure(Component.literal("§cOpciones: HUMANO, ELFO, ENANO, ORCO"));
                             return 0;
                         }
                     })))
-            // Lanzar habilidad de tu clase
             .then(Commands.literal("habilidad").executes(ctx -> {
-                ServerPlayer p = ctx.getSource().getPlayerOrException();
-                usarHabilidad(p);
+                usarHabilidad(ctx.getSource().getPlayerOrException());
                 return 1;
             }))
         );
     }
 
-    private static void usarHabilidad(ServerPlayer p) {
+    private static String estadoSkill(ServerPlayer p, String id, String desc) {
+        return RpgData.tieneHabilidad(p, id)
+            ? "§a[✔] " + id + ": §7" + desc
+            : "§7[ ] §f" + id + " §e(1 pto)§7: " + desc;
+    }
+
+    public static void usarHabilidad(ServerPlayer p) {
         RpgEnums.Clase clase = RpgData.getClase(p);
         ServerLevel level = (ServerLevel) p.level();
+        float mult = RpgData.tieneHabilidad(p, "poder") ? 2.0f : 1.0f;
 
         switch (clase) {
             case MAGO -> {
                 if (!ManaManager.gastarMana(p, 25)) {
-                    p.displayClientMessage(Component.literal("§c¡No tienes suficiente maná! (Necesitas 25)"), true);
+                    p.sendSystemMessage(Component.literal("§c¡Maná insuficiente!"));
                     return;
                 }
-                // Rayo de fuego hacia donde mira el mago
                 Vec3 ojos = p.getEyePosition();
                 Vec3 mira = p.getLookAngle();
-                for (double d = 1; d <= 12; d += 0.5) {
-                    Vec3 punto = ojos.add(mira.scale(d));
-                    level.sendParticles(ParticleTypes.FLAME, punto.x, punto.y, punto.z, 2, 0.05, 0.05, 0.05, 0.01);
+                for (double d = 1; d <= 14; d += 0.4) {
+                    Vec3 pt = ojos.add(mira.scale(d));
+                    level.sendParticles(ParticleTypes.FLAME, pt.x, pt.y, pt.z, 3, 0.08, 0.08, 0.08, 0.01);
+                    level.sendParticles(ParticleTypes.SOUL_FIRE_FLAME, pt.x, pt.y, pt.z, 1, 0.02, 0.02, 0.02, 0.0);
                 }
-                // Dañar al enemigo apuntado
-                for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, p.getBoundingBox().expandTowards(mira.scale(12)).inflate(1.0), e -> e != p && e.isAlive())) {
-                    target.hurt(p.damageSources().indirectMagic(p, p), 8.0f);
-                    target.setRemainingFireTicks(60);
+                for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, p.getBoundingBox().expandTowards(mira.scale(14)).inflate(1.2), e -> e != p && e.isAlive())) {
+                    target.hurt(p.damageSources().indirectMagic(p, p), 8.0f * mult);
+                    target.setRemainingFireTicks(80);
                 }
                 level.playSound(null, p.blockPosition(), SoundEvents.BLAZE_SHOOT, SoundSource.PLAYERS, 1.0f, 1.0f);
-                p.displayClientMessage(Component.literal("§6¡Rayo de Fuego!"), true);
             }
             case GUERRERO -> {
                 if (!ManaManager.gastarMana(p, 20)) {
-                    p.displayClientMessage(Component.literal("§c¡No tienes suficiente maná! (Necesitas 20)"), true);
+                    p.sendSystemMessage(Component.literal("§c¡Maná insuficiente!"));
                     return;
                 }
-                p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 200, 1)); // Fuerza II por 10 seg
-                level.playSound(null, p.blockPosition(), SoundEvents.ENDER_DRAGON_GROWL, SoundSource.PLAYERS, 0.7f, 1.2f);
-                p.displayClientMessage(Component.literal("§c¡Grito de Guerra activado! (+Fuerza)"), true);
+                // Golpe sísmico que lanza enemigos por los aires
+                level.sendParticles(ParticleTypes.EXPLOSION, p.getX(), p.getY(), p.getZ(), 4, 1.5, 0.2, 1.5, 0.0);
+                level.sendParticles(ParticleTypes.SWEEP_ATTACK, p.getX(), p.getY() + 1.0, p.getZ(), 6, 1.5, 0.5, 1.5, 0.0);
+                for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, p.getBoundingBox().inflate(4.5), e -> e != p && e.isAlive())) {
+                    target.hurt(p.damageSources().playerAttack(p), 6.0f * mult);
+                    target.setDeltaMovement(target.getDeltaMovement().add(0, 0.6, 0));
+                }
+                p.addEffect(new MobEffectInstance(MobEffects.DAMAGE_BOOST, 200, 1));
+                level.playSound(null, p.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 0.8f, 1.2f);
             }
             case ARQUERO -> {
                 if (!ManaManager.gastarMana(p, 15)) {
-                    p.displayClientMessage(Component.literal("§c¡No tienes suficiente maná! (Necesitas 15)"), true);
+                    p.sendSystemMessage(Component.literal("§c¡Maná insuficiente!"));
                     return;
                 }
-                p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 160, 2)); // Velocidad III por 8 seg
+                level.sendParticles(ParticleTypes.CLOUD, p.getX(), p.getY() + 0.5, p.getZ(), 20, 0.5, 0.5, 0.5, 0.1);
+                p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 160, 2));
+                // Empujón veloz hacia donde mira
+                Vec3 impulso = p.getLookAngle().scale(1.3);
+                p.setDeltaMovement(impulso.x, 0.4, impulso.z);
+                p.hurtMarked = true;
                 level.playSound(null, p.blockPosition(), SoundEvents.ARROW_SHOOT, SoundSource.PLAYERS, 1.0f, 1.5f);
-                p.displayClientMessage(Component.literal("§b¡Paso del Viento! (+Velocidad)"), true);
             }
             case PICARO -> {
                 if (!ManaManager.gastarMana(p, 20)) {
-                    p.displayClientMessage(Component.literal("§c¡No tienes suficiente maná! (Necesitas 20)"), true);
+                    p.sendSystemMessage(Component.literal("§c¡Maná insuficiente!"));
                     return;
                 }
-                p.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, 160, 0)); // Invisibilidad por 8 seg
-                level.playSound(null, p.blockPosition(), SoundEvents.PHANTOM_SWOOP, SoundSource.PLAYERS, 1.0f, 1.0f);
-                p.displayClientMessage(Component.literal("§8¡Te desvaneces en las sombras!"), true);
+                level.sendParticles(ParticleTypes.LARGE_SMOKE, p.getX(), p.getY() + 1, p.getZ(), 25, 0.4, 0.6, 0.4, 0.05);
+                p.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, 160, 0));
+                p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 160, 1));
+                level.playSound(null, p.blockPosition(), SoundEvents.PHANTOM_SWOOP, SoundSource.PLAYERS, 1.0f, 1.2f);
             }
             case CLERIGO -> {
                 if (!ManaManager.gastarMana(p, 30)) {
-                    p.displayClientMessage(Component.literal("§c¡No tienes suficiente maná! (Necesitas 30)"), true);
+                    p.sendSystemMessage(Component.literal("§c¡Maná insuficiente!"));
                     return;
                 }
-                p.heal(6.0f); // Cura 3 corazones
-                level.sendParticles(ParticleTypes.HEART, p.getX(), p.getY() + 1.2, p.getZ(), 8, 0.3, 0.3, 0.3, 0.0);
+                p.heal(6.0f * mult);
+                p.addEffect(new MobEffectInstance(MobEffects.REGENERATION, 120, 1));
+                level.sendParticles(ParticleTypes.HEART, p.getX(), p.getY() + 1.2, p.getZ(), 10, 0.6, 0.5, 0.6, 0.0);
+                level.sendParticles(ParticleTypes.END_ROD, p.getX(), p.getY() + 1.0, p.getZ(), 20, 0.8, 0.8, 0.8, 0.05);
                 level.playSound(null, p.blockPosition(), SoundEvents.PLAYER_LEVELUP, SoundSource.PLAYERS, 0.8f, 1.8f);
-                p.displayClientMessage(Component.literal("§a¡Sanación Divina aplicada!"), true);
             }
-            default -> p.displayClientMessage(Component.literal("§cElige una clase primero con /rpg clase"), true);
+            default -> p.sendSystemMessage(Component.literal("§cElige una clase primero con /rpg clase"));
         }
     }
 }
