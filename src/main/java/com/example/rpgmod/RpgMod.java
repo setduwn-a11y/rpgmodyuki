@@ -8,7 +8,7 @@ import com.example.rpgmod.network.NetworkHandler;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.loading.FMLEnvironment;
@@ -21,17 +21,14 @@ public class RpgMod {
     public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
     public RpgMod() {
-        // Iniciar canal de red
         NetworkHandler.init();
 
-        // Comandos y eventos del juego
         MinecraftForge.EVENT_BUS.addListener(RpgCommands::onRegisterCommands);
         MinecraftForge.EVENT_BUS.addListener(RpgMod::onPlayerLogin);
         MinecraftForge.EVENT_BUS.addListener(RpgMod::onPlayerRespawn);
         MinecraftForge.EVENT_BUS.addListener(RpgMod::onPlayerClone);
-        MinecraftForge.EVENT_BUS.addListener(RpgMod::onPlayerTick);
+        MinecraftForge.EVENT_BUS.addListener(RpgMod::onLivingTick);
 
-        // Si estamos en la computadora del jugador, activar la barra visual en pantalla
         if (FMLEnvironment.dist == Dist.CLIENT) {
             MinecraftForge.EVENT_BUS.addListener(ClientHandler::renderHud);
         }
@@ -60,8 +57,8 @@ public class RpgMod {
     }
 
     // Cada 1 segundo (20 ticks del juego), recupera maná
-    private static void onPlayerTick(TickEvent.PlayerTickEvent.Post event) {
-        if (event.getEntity() instanceof ServerPlayer p && p.level().getGameTime() % 20 == 0) {
+    private static void onLivingTick(LivingEvent.LivingTickEvent event) {
+        if (event.getEntity() instanceof ServerPlayer p && p.tickCount % 20 == 0) {
             ManaManager.regenerar(p);
         }
     }
