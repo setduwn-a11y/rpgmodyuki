@@ -2,6 +2,7 @@ package com.example.rpgmod.command;
 
 import com.example.rpgmod.data.RpgData;
 import com.example.rpgmod.data.RpgEnums;
+import com.example.rpgmod.item.ModItems;
 import com.example.rpgmod.mana.ManaManager;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
@@ -16,8 +17,10 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.entity.player.ItemTooltipEvent;
 
 public class RpgCommands {
 
@@ -44,8 +47,8 @@ public class RpgCommands {
                     estadoSkill(p, "vitalidad", "+2 Corazones permanentes") + "\n" +
                     estadoSkill(p, "sabiduria", "+40 de Maná máximo") + "\n" +
                     estadoSkill(p, "agilidad", "+10% de Velocidad") + "\n" +
-                    estadoSkill(p, "poder", "Doble de daño en tus habilidades") + "\n" +
-                    estadoSkill(p, "maestria", "Tus habilidades cuestan 30% menos maná") + "\n" +
+                    estadoSkill(p, "poder", "Doble de daño en habilidades") + "\n" +
+                    estadoSkill(p, "maestria", "30% menos coste de maná") + "\n" +
                     "§eUsa: §f/rpg aprender <nombre>"
                 ), false);
                 return 1;
@@ -56,20 +59,20 @@ public class RpgCommands {
                         ServerPlayer p = ctx.getSource().getPlayerOrException();
                         String id = StringArgumentType.getString(ctx, "habilidad").toLowerCase();
                         if (!id.equals("vitalidad") && !id.equals("sabiduria") && !id.equals("agilidad") && !id.equals("poder") && !id.equals("maestria")) {
-                            ctx.getSource().sendFailure(Component.literal("§cHabilidad no existe. Mira /rpg arbol"));
+                            ctx.getSource().sendFailure(Component.literal("§cHabilidad no válida."));
                             return 0;
                         }
                         if (RpgData.tieneHabilidad(p, id)) {
-                            ctx.getSource().sendFailure(Component.literal("§cYa aprendiste esta habilidad."));
+                            ctx.getSource().sendFailure(Component.literal("§cYa la tienes aprendida."));
                             return 0;
                         }
                         if (RpgData.getPuntos(p) < 1) {
-                            ctx.getSource().sendFailure(Component.literal("§cNo tienes Puntos de Habilidad. ¡Mata monstruos para subir de nivel!"));
+                            ctx.getSource().sendFailure(Component.literal("§cNo tienes puntos de habilidad."));
                             return 0;
                         }
                         RpgData.setPuntos(p, RpgData.getPuntos(p) - 1);
                         RpgData.desbloquearHabilidad(p, id);
-                        ctx.getSource().sendSuccess(() -> Component.literal("§a¡Desbloqueaste la mejora: §e" + id.toUpperCase() + "§a!"), false);
+                        ctx.getSource().sendSuccess(() -> Component.literal("§a¡Aprendiste: §e" + id.toUpperCase() + "§a!"), false);
                         return 1;
                     })))
             .then(Commands.literal("clase")
@@ -81,7 +84,7 @@ public class RpgCommands {
                             RpgEnums.Clase clase = RpgEnums.Clase.valueOf(arg);
                             RpgData.setClase(p, clase);
                             ManaManager.setMana(p, ManaManager.getMaxMana(p));
-                            ctx.getSource().sendSuccess(() -> Component.literal("§aAhora eres de la clase: §f" + clase.nombre), false);
+                            ctx.getSource().sendSuccess(() -> Component.literal("§aClase elegida: §f" + clase.nombre), false);
                             return 1;
                         } catch (Exception e) {
                             ctx.getSource().sendFailure(Component.literal("§cOpciones: GUERRERO, MAGO, ARQUERO, PICARO, CLERIGO"));
@@ -96,7 +99,7 @@ public class RpgCommands {
                         try {
                             RpgEnums.Raza raza = RpgEnums.Raza.valueOf(arg);
                             RpgData.setRaza(p, raza);
-                            ctx.getSource().sendSuccess(() -> Component.literal("§aTu raza ahora es: §f" + raza.nombre), false);
+                            ctx.getSource().sendSuccess(() -> Component.literal("§aRaza elegida: §f" + raza.nombre), false);
                             return 1;
                         } catch (Exception e) {
                             ctx.getSource().sendFailure(Component.literal("§cOpciones: HUMANO, ELFO, ENANO, ORCO"));
@@ -114,6 +117,27 @@ public class RpgCommands {
         return RpgData.tieneHabilidad(p, id)
             ? "§a[✔] " + id + ": §7" + desc
             : "§7[ ] §f" + id + " §e(1 pto)§7: " + desc;
+    }
+
+    // Muestra la descripción en colores al poner el cursor sobre las armas
+    public static void onTooltip(ItemTooltipEvent event) {
+        ItemStack stack = event.getItemStack();
+        if (stack.is(ModItems.MANDOBLE_GUERRERO.get())) {
+            event.getToolTip().add(Component.literal("§6Clase recomendada: §cGuerrero"));
+            event.getToolTip().add(Component.literal("§7Golpe sísmico explosivo con Shift + Clic"));
+        } else if (stack.is(ModItems.BACULO_MAGO.get())) {
+            event.getToolTip().add(Component.literal("§6Clase recomendada: §bMago"));
+            event.getToolTip().add(Component.literal("§7Dispara Rayos de Fuego mágicos"));
+        } else if (stack.is(ModItems.DAGA_PICARO.get())) {
+            event.getToolTip().add(Component.literal("§6Clase recomendada: §8Pícaro"));
+            event.getToolTip().add(Component.literal("§7Ataque ultra rápido y paso invisible"));
+        } else if (stack.is(ModItems.ARCO_ARQUERO.get())) {
+            event.getToolTip().add(Component.literal("§6Clase recomendada: §aArquero"));
+            event.getToolTip().add(Component.literal("§7Propulsión por ráfaga de aire"));
+        } else if (stack.is(ModItems.MAZA_CLERIGO.get())) {
+            event.getToolTip().add(Component.literal("§6Clase recomendada: §eClérigo"));
+            event.getToolTip().add(Component.literal("§7Canaliza luz divina y curación"));
+        }
     }
 
     public static void usarHabilidad(ServerPlayer p) {
@@ -145,7 +169,6 @@ public class RpgCommands {
                     p.sendSystemMessage(Component.literal("§c¡Maná insuficiente!"));
                     return;
                 }
-                // Golpe sísmico que lanza enemigos por los aires
                 level.sendParticles(ParticleTypes.EXPLOSION, p.getX(), p.getY(), p.getZ(), 4, 1.5, 0.2, 1.5, 0.0);
                 level.sendParticles(ParticleTypes.SWEEP_ATTACK, p.getX(), p.getY() + 1.0, p.getZ(), 6, 1.5, 0.5, 1.5, 0.0);
                 for (LivingEntity target : level.getEntitiesOfClass(LivingEntity.class, p.getBoundingBox().inflate(4.5), e -> e != p && e.isAlive())) {
@@ -162,7 +185,6 @@ public class RpgCommands {
                 }
                 level.sendParticles(ParticleTypes.CLOUD, p.getX(), p.getY() + 0.5, p.getZ(), 20, 0.5, 0.5, 0.5, 0.1);
                 p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 160, 2));
-                // Empujón veloz hacia donde mira
                 Vec3 impulso = p.getLookAngle().scale(1.3);
                 p.setDeltaMovement(impulso.x, 0.4, impulso.z);
                 p.hurtMarked = true;
